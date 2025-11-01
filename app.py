@@ -1,7 +1,3 @@
-# ====================================
-# BACK-END - app.py
-# ====================================
-
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
@@ -13,8 +9,14 @@ import json
 app = Flask(__name__)
 CORS(app)
 
-# Configurar API Key do Gemini
-API_KEY = "AIzaSyDyKuHQHUJGR9hapcd60vxRDvRV-55Lupk"
+# Configurar API Key do Gemini usando variável de ambiente
+# No Render: Configure em Environment Variables
+# Localmente: Crie um arquivo .env ou export API_KEY="sua_chave"
+API_KEY = os.environ.get('API_KEY')
+
+if not API_KEY:
+    raise ValueError("⚠️ API_KEY não configurada! Configure a variável de ambiente API_KEY")
+
 genai.configure(api_key=API_KEY)
 
 # Função de pesquisa na web usando DuckDuckGo (não precisa de API key)
@@ -57,46 +59,45 @@ Você é a Potatolete IA, uma assistente virtual amigável, útil e divertida.
 PRIORIDADE MÁXIMA:
 - SEMPRE responda a pergunta do usuário de forma ÚTIL e COMPLETA primeiro
 - Depois de dar a resposta útil, você pode adicionar uma piada sobre tolete/sigma/beta/aura
-- Se o usuário pedir para pesquisar algo, use a função de busca disponível
 
-CAPACIDADES ESPECIAIS:
-- Você pode pesquisar na internet quando necessário
-- Quando o usuário pedir informações atuais ou que você não sabe, SEMPRE pesquise
-- Use frases como "Deixa eu pesquisar isso pra você" antes de buscar
+QUANDO USAR PESQUISA:
+- Se a pergunta é sobre algo atual, notícias, jogos, informações que mudam
+- Se você não tem certeza da resposta
+- Se o usuário pedir explicitamente para pesquisar
+- SEMPRE que precisar de informações atualizadas ou específicas
 
 PERSONALIDADE:
 - Seja útil, inteligente e prestativa
-- Adicione humor sobre tolete, sigma, beta, aura de forma LEVE
+- Adicione humor sobre tolete, sigma, beta, aura de forma LEVE e NATURAL
 - Não exagere nas brincadeiras - apenas uma por resposta
 - SEM EMOJI
 
 REGRAS:
 - Sempre responda em português brasileiro
 - SEMPRE dê uma resposta útil e informativa PRIMEIRO
-- Se não souber algo atual, PESQUISE na internet
+- Use os resultados de pesquisa quando disponíveis para dar respostas precisas
 - Se o usuário pedir para ser sério ou útil, SEJA 100% SÉRIO e esqueça as brincadeiras
-- Evite respostas muito longas, seja objetiva
-- Seja honesta sobre suas limitações
+- Seja objetiva e clara
+- Cite fontes quando usar informações de pesquisa
 
 FORMATO DE RESPOSTA IDEAL:
 1. Responda a pergunta de forma útil e clara
-2. (Opcional) Adicione UMA piada leve no final
+2. (Opcional) Adicione UMA piada leve no final relacionada ao contexto
 
 EXPERTISE:
 - Programação (Python, JavaScript, HTML, CSS, etc)
 - Dúvidas gerais, tecnologia, jogos
 - Escrita e criatividade
 - Resolução de problemas
-- Pesquisa na internet
+- Pesquisa e informações atualizadas
 
 Lembre-se: UTILIDADE primeiro, diversão depois!
 """
 
-# Criar modelo com instruções do sistema e ferramentas de busca
+# Criar modelo SEM ferramentas de busca (vamos fazer manual)
 modelo = genai.GenerativeModel(
     'gemini-2.0-flash-exp',
-    system_instruction=INSTRUCOES_SISTEMA,
-    tools='google_search_retrieval'
+    system_instruction=INSTRUCOES_SISTEMA
 )
 
 # Criar modelo com instruções do sistema
@@ -128,11 +129,32 @@ def chat():
         
         chat = chat_sessions[session_id]
         
-        # Enviar mensagem e obter resposta
-        response = chat.send_message(message)
+        # Detectar se precisa de pesquisa (palavras-chave)
+        keywords_pesquisa = ['pesquisa', 'pesquise', 'busque', 'procure', 'qual', 'como pegar', 
+                            'onde', 'quando', 'notícia', 'atual', 'hoje', 'agora', 'recente']
+        
+        precisa_pesquisa = any(keyword in message.lower() for keyword in keywords_pesquisa)
+        
+        # Se detectar necessidade de pesquisa, fazer busca
+        search_results = None
+        if precisa_pesquisa:
+            search_results = search_web(message)
+        
+        # Preparar mensagem com contexto de pesquisa se houver
+        if search_results:
+            context = "\n\n[RESULTADOS DA PESQUISA NA WEB]:\n"
+            for i, result in enumerate(search_results, 1):
+                context += f"\n{i}. {result['title']}\n{result['snippet']}\n"
+            
+            message_with_context = f"{message}\n{context}\nUse essas informações para responder de forma precisa e útil."
+            response = chat.send_message(message_with_context)
+        else:
+            # Enviar mensagem normal sem pesquisa
+            response = chat.send_message(message)
         
         return jsonify({
             'response': response.text,
+            'searched': search_results is not None,
             'success': True
         })
         
@@ -157,5 +179,3 @@ def reset_chat():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
-
-
