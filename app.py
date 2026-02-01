@@ -102,7 +102,7 @@ modelo = genai.GenerativeModel(
 
 # Criar modelo com instruções do sistema
 modelo = genai.GenerativeModel(
-    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash',
     system_instruction=INSTRUCOES_SISTEMA
 )
 
