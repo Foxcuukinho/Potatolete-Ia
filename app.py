@@ -100,11 +100,6 @@ modelo = genai.GenerativeModel(
     system_instruction=INSTRUCOES_SISTEMA
 )
 
-# Criar modelo com instruções do sistema
-modelo = genai.GenerativeModel(
-    'gemini-1.5-flash',
-    system_instruction=INSTRUCOES_SISTEMA
-)
 
 # Armazenar sessões de chat (em produção, use Redis ou banco de dados)
 chat_sessions = {}
