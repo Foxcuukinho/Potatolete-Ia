@@ -4,14 +4,10 @@ import google.generativeai as genai
 import os
 import requests
 from bs4 import BeautifulSoup
-import json
 
 app = Flask(__name__)
 CORS(app)
 
-# Configurar API Key do Gemini usando variável de ambiente
-# No Render: Configure em Environment Variables
-# Localmente: Crie um arquivo .env ou export API_KEY="sua_chave"
 API_KEY = os.environ.get('API_KEY')
 
 if not API_KEY:
@@ -19,11 +15,9 @@ if not API_KEY:
 
 genai.configure(api_key=API_KEY)
 
-# Função de pesquisa na web usando DuckDuckGo (não precisa de API key)
 def search_web(query):
     """Pesquisa na web e retorna resultados relevantes"""
     try:
-        # Usar DuckDuckGo HTML para pesquisa
         url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(query)}"
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -33,7 +27,7 @@ def search_web(query):
         soup = BeautifulSoup(response.text, 'html.parser')
         
         results = []
-        for result in soup.find_all('div', class_='result')[:5]:  # Pegar top 5 resultados
+        for result in soup.find_all('div', class_='result')[:5]:
             title_elem = result.find('a', class_='result__a')
             snippet_elem = result.find('a', class_='result__snippet')
             
@@ -49,10 +43,6 @@ def search_web(query):
         print(f"Erro na pesquisa: {e}")
         return None
 
-# ====================================
-# INSTRUÇÕES/PERSONALIDADE DA POTATOLETE IA
-# Customize aqui como você quer que ela se comporte!
-# ====================================
 INSTRUCOES_SISTEMA = """
 Você é a Potatolete IA, uma assistente virtual amigável, útil e divertida.
 
@@ -94,14 +84,11 @@ EXPERTISE:
 Lembre-se: UTILIDADE primeiro, diversão depois!
 """
 
-# Criar modelo SEM ferramentas de busca (vamos fazer manual)
 modelo = genai.GenerativeModel(
-    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash',
     system_instruction=INSTRUCOES_SISTEMA
 )
 
-
-# Armazenar sessões de chat (em produção, use Redis ou banco de dados)
 chat_sessions = {}
 
 @app.route('/')
@@ -118,24 +105,20 @@ def chat():
         if not message:
             return jsonify({'error': 'Mensagem vazia'}), 400
         
-        # Criar ou recuperar sessão de chat
         if session_id not in chat_sessions:
             chat_sessions[session_id] = modelo.start_chat(history=[])
         
         chat = chat_sessions[session_id]
         
-        # Detectar se precisa de pesquisa (palavras-chave)
-        keywords_pesquisa = ['pesquisa', 'pesquise', 'busque', 'procure', 'qual', 'como pegar', 
+        keywords_pesquisa = ['pesquisa', 'pesquise', 'busque', 'procure',
                             'onde', 'quando', 'notícia', 'atual', 'hoje', 'agora', 'recente']
         
         precisa_pesquisa = any(keyword in message.lower() for keyword in keywords_pesquisa)
         
-        # Se detectar necessidade de pesquisa, fazer busca
         search_results = None
         if precisa_pesquisa:
             search_results = search_web(message)
         
-        # Preparar mensagem com contexto de pesquisa se houver
         if search_results:
             context = "\n\n[RESULTADOS DA PESQUISA NA WEB]:\n"
             for i, result in enumerate(search_results, 1):
@@ -144,7 +127,6 @@ def chat():
             message_with_context = f"{message}\n{context}\nUse essas informações para responder de forma precisa e útil."
             response = chat.send_message(message_with_context)
         else:
-            # Enviar mensagem normal sem pesquisa
             response = chat.send_message(message)
         
         return jsonify({
